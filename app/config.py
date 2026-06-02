@@ -12,10 +12,10 @@ class Settings(BaseSettings):
     llm_base_url: str = "https://api.deepseek.com/v1"
     llm_model: str = "deepseek-chat"
 
-    # ── Embeddings (OpenAI-compatible) ──────────────────────────────────
+    # ── Embeddings (OpenAI-compatible: SiliconFlow, OpenAI, etc.) ────────
     embedding_api_key: str = ""
-    embedding_base_url: str = "https://api.openai.com/v1"
-    embedding_model: str = "text-embedding-3-small"
+    embedding_base_url: str = "https://api.siliconflow.cn/v1"
+    embedding_model: str = "BAAI/bge-m3"
 
     # ── Vector Store ────────────────────────────────────────────────────
     chroma_persist_dir: str = os.path.join(
