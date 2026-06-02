@@ -1169,18 +1169,19 @@ function renderMarkdown(text) {
     .replace(/</g, '&lt;')
     .replace(/>/g, '&gt;');
 
-  // ── Code blocks (must be before inline processing) ─────────────────────────
+  // ── Code blocks (must be before any inline processing) ─────────────────
   const codeBlocks = [];
-  html = html.replace(/```(\w*)\n?([\s\S]*?)```/g, (_, _lang, code) => {
+  html = html.replace(/\`\`\`(\w*)\n?([\s\S]*?)\`\`\`/g, (_, lang, code) => {
     const idx = codeBlocks.length;
-    codeBlocks.push(`<pre><code>${esc(code)}</code></pre>`);
-    return `%%CODEBLOCK_${idx}%%`;
+    const langClass = lang ? ` class="lang-${esc(lang)}"` : '';
+    codeBlocks.push(`<pre><code${langClass}>${esc(code)}</code></pre>`);
+    return `%%CB${idx}%%`;
   });
 
-  // ── Inline code ────────────────────────────────────────────────────────────
-  html = html.replace(/`([^`]+)`/g, '<code>$1</code>');
+  // ── Inline code ────────────────────────────────────────────────────────
+  html = html.replace(/\`([^\`]+)\`/g, '<code>$1</code>');
 
-  // ── Headings ───────────────────────────────────────────────────────────────
+  // ── Headings ───────────────────────────────────────────────────────────
   html = html.replace(/^###### (.+)$/gm, '<h6>$1</h6>');
   html = html.replace(/^##### (.+)$/gm, '<h5>$1</h5>');
   html = html.replace(/^#### (.+)$/gm, '<h4>$1</h4>');
@@ -1188,66 +1189,87 @@ function renderMarkdown(text) {
   html = html.replace(/^## (.+)$/gm, '<h2>$1</h2>');
   html = html.replace(/^# (.+)$/gm, '<h1>$1</h1>');
 
-  // ── Horizontal rules ───────────────────────────────────────────────────────
+  // ── Horizontal rules ───────────────────────────────────────────────────
   html = html.replace(/^---$/gm, '<hr>');
   html = html.replace(/^\*\*\*$/gm, '<hr>');
 
-  // ── Blockquotes ────────────────────────────────────────────────────────────
+  // ── Blockquotes ────────────────────────────────────────────────────────
   html = html.replace(/^&gt; (.+)$/gm, '<blockquote>$1</blockquote>');
 
-  // ── Unordered lists ────────────────────────────────────────────────────────
-  html = html.replace(/^[-*] (.+)$/gm, '<li>$1</li>');
-  html = html.replace(/(<li>.*<\/li>\n?)+/g, '<ul>$&</ul>');
-
-  // ── Ordered lists ──────────────────────────────────────────────────────────
-  html = html.replace(/^\d+\.\s(.+)$/gm, '<li>$1</li>');
-  html = html.replace(/(<li>.*<\/li>\n?)+/g, (match) => {
-    if (!match.includes('<ul>')) return '<ol>' + match + '</ol>';
-    return match;
-  });
-
-  // ── Bold + italic ──────────────────────────────────────────────────────────
+  // ── Bold + italic ──────────────────────────────────────────────────────
   html = html.replace(/\*\*\*(.+?)\*\*\*/g, '<strong><em>$1</em></strong>');
   html = html.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
   html = html.replace(/\*(.+?)\*/g, '<em>$1</em>');
 
-  // ── Links ──────────────────────────────────────────────────────────────────
+  // ── Links ──────────────────────────────────────────────────────────────
   html = html.replace(/\[([^\]]+)\]\(([^)]+)\)/g,
     '<a href="$2" target="_blank" rel="noopener">$1</a>');
 
-  // ── Paragraphs ─────────────────────────────────────────────────────────────
-  // Normalize multiple newlines
+  // ── Line-by-line block processing ──────────────────────────────────────
+  // Normalize multiple blank lines
   html = html.replace(/\n{3,}/g, '\n\n');
 
   const lines = html.split('\n');
-  const result = [];
-  let inParagraph = false;
+  const out = [];
+  let inP = false;       // inside <p>
+  let inUl = false;      // inside <ul>
+  let inOl = false;      // inside <ol>
 
   for (let i = 0; i < lines.length; i++) {
-    const line = lines[i];
-    const trimmed = line.trim();
+    const raw = lines[i];
+    const t = raw.trim();
 
-    if (trimmed === '') {
-      if (inParagraph) { result.push('</p>'); inParagraph = false; }
+    // Empty line = paragraph / list break
+    if (t === '') {
+      if (inP) { out.push('</p>'); inP = false; }
+      if (inUl) { out.push('</ul>'); inUl = false; }
+      if (inOl) { out.push('</ol>'); inOl = false; }
       continue;
     }
 
-    if (/^<(h[1-6]|ul|ol|li|pre|blockquote|hr|table)/.test(trimmed)) {
-      if (inParagraph) { result.push('</p>'); inParagraph = false; }
-      result.push(line);
+    // Unordered list item
+    if (/^[-*]\s/.test(t)) {
+      if (inP) { out.push('</p>'); inP = false; }
+      if (inOl) { out.push('</ol>'); inOl = false; }
+      if (!inUl) { out.push('<ul>'); inUl = true; }
+      out.push('<li>' + t.replace(/^[-*]\s+/, '') + '</li>');
       continue;
     }
 
-    if (!inParagraph) { result.push('<p>'); inParagraph = true; }
-    else { result.push('<br>'); }
-    result.push(line);
+    // Ordered list item
+    if (/^\d+\.\s/.test(t)) {
+      if (inP) { out.push('</p>'); inP = false; }
+      if (inUl) { out.push('</ul>'); inUl = false; }
+      if (!inOl) { out.push('<ol>'); inOl = true; }
+      out.push('<li>' + t.replace(/^\d+\.\s+/, '') + '</li>');
+      continue;
+    }
+
+    // Block-level HTML elements (headings, code blocks, blockquotes, hr)
+    if (/^<(h[1-6]|pre|blockquote|hr)\b/.test(t) || /^%%CB\d+%%$/.test(t)) {
+      if (inP) { out.push('</p>'); inP = false; }
+      if (inUl) { out.push('</ul>'); inUl = false; }
+      if (inOl) { out.push('</ol>'); inOl = false; }
+      out.push(raw);
+      continue;
+    }
+
+    // Regular paragraph text
+    if (!inP) { out.push('<p>'); inP = true; }
+    else { out.push('<br>'); }
+    out.push(raw);
   }
-  if (inParagraph) result.push('</p>');
-  html = result.join('\n');
 
-  // ── Restore code blocks ────────────────────────────────────────────────────
+  // Close any open tags
+  if (inP) out.push('</p>');
+  if (inUl) out.push('</ul>');
+  if (inOl) out.push('</ol>');
+
+  html = out.join('\n');
+
+  // ── Restore code blocks ────────────────────────────────────────────────
   codeBlocks.forEach((block, i) => {
-    html = html.replace(`%%CODEBLOCK_${i}%%`, block);
+    html = html.replace(`%%CB${i}%%`, block);
   });
 
   return html;
