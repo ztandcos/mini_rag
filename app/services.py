@@ -173,6 +173,22 @@ class LLMService:
         """Simple prompt → answer."""
         return self.llm.invoke(prompt).content
 
+    def invoke_with_usage(self, prompt: str) -> tuple[str, dict]:
+        """
+        Invoke the LLM and return (response_text, token_usage).
+
+        token_usage format: {prompt_tokens, completion_tokens, total_tokens}
+        Returns empty dict if token usage is not available.
+        """
+        response = self.llm.invoke(prompt)
+        meta = response.response_metadata or {}
+        usage = meta.get("token_usage", {})
+        return response.content, {
+            "prompt_tokens": usage.get("prompt_tokens", 0),
+            "completion_tokens": usage.get("completion_tokens", 0),
+            "total_tokens": usage.get("total_tokens", 0),
+        }
+
     @property
     def model(self) -> ChatOpenAI:
         return self.llm

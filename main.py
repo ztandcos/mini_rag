@@ -34,6 +34,7 @@ from app.schemas import (
     ChatRequest,
     ChatResponse,
     SourceInfo,
+    TokenUsage,
     HealthResponse,
 )
 from app.services import get_ingestion_service
@@ -281,10 +282,15 @@ def agent_chat(req: ChatRequest, db: DBSession = Depends(get_db_session)):
 
     result = _agent.chat(req.message, db)
 
+    # Convert token_usage dict to model if present
+    tu = result.get("token_usage")
+    token_usage_model = TokenUsage(**tu) if tu and tu.get("total_tokens", 0) > 0 else None
+
     return ChatResponse(
         answer=result["answer"],
         sources=[SourceInfo(**s) for s in result.get("sources", [])],
         agent_thought=result.get("agent_thought"),
+        token_usage=token_usage_model,
     )
 
 

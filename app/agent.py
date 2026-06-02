@@ -75,7 +75,7 @@ class RAGAgent:
             db: Database session for tool execution
 
         Returns:
-            dict with "answer", "sources", "agent_thought"
+            dict with "answer", "sources", "agent_thought", "token_usage"
         """
         messages = [
             {"role": "system", "content": SYSTEM_PROMPT},
@@ -86,9 +86,25 @@ class RAGAgent:
         thought_steps = []
         max_turns = 5  # Prevent infinite loops
 
+        # Track token usage across all turns
+        token_usage = {
+            "prompt_tokens": 0,
+            "completion_tokens": 0,
+            "total_tokens": 0,
+        }
+
         for turn in range(max_turns):
             # ── Step 1: LLM decides next action ──────────────────────────
             response = self.llm_with_tools.invoke(messages)
+
+            # Aggregate token usage from this response
+            meta = response.response_metadata or {}
+            usage = meta.get("token_usage", {})
+            if usage:
+                token_usage["prompt_tokens"] += usage.get("prompt_tokens", 0)
+                token_usage["completion_tokens"] += usage.get("completion_tokens", 0)
+                token_usage["total_tokens"] += usage.get("total_tokens", 0)
+
             messages.append(response)
 
             # ── Step 2: Check if LLM wants to call tools ────────────────
@@ -143,7 +159,11 @@ class RAGAgent:
         elif messages and isinstance(messages[-1], dict):
             answer = messages[-1].get("content", "")
 
-        logger.info("Agent response: %s...", answer[:100])
+        logger.info("Agent response: %s... (tokens: %s)", answer[:80], token_usage)
+
+        # If no tokens were tracked at all (provider didn't return usage), remove the zero dict
+        if token_usage["total_tokens"] == 0:
+            token_usage = {}
 
         return {
             "answer": answer,
@@ -151,4 +171,5 @@ class RAGAgent:
             "agent_thought": json.dumps(thought_steps, ensure_ascii=False)
             if thought_steps
             else None,
+            "token_usage": token_usage,
         }

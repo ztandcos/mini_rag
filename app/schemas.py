@@ -58,12 +58,22 @@ class SourceInfo(BaseModel):
     content: str
 
 
+class TokenUsage(BaseModel):
+    """Token consumption for an agent query."""
+    prompt_tokens: int = 0
+    completion_tokens: int = 0
+    total_tokens: int = 0
+
+
 class ChatResponse(BaseModel):
     """Agent's response with reasoning trace and sources."""
     answer: str
     sources: list[SourceInfo] = []
     agent_thought: Optional[str] = Field(
         None, description="Agent's internal reasoning trace"
+    )
+    token_usage: Optional[TokenUsage] = Field(
+        None, description="Token consumption statistics"
     )
 
 

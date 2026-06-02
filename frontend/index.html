@@ -580,6 +580,27 @@
 
   .msg.end .msg-time { text-align: right; }
 
+  .msg-meta {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 4px 2px 0;
+  }
+
+  .token-badge {
+    font-size: 10px;
+    color: var(--text-tertiary);
+    background: var(--bg-elevated);
+    padding: 1px 8px;
+    border-radius: 10px;
+    font-family: var(--font-mono);
+    letter-spacing: 0.2px;
+    border: 1px solid var(--border-subtle);
+    display: inline-flex;
+    align-items: center;
+    gap: 3px;
+  }
+
   /* ── Markdown in messages ────────────────────────────────────────────── */
   .msg-bubble strong, .msg-bubble b { font-weight: 700; }
   .msg-bubble code {
@@ -1213,7 +1234,7 @@ async function ingest() {
 }
 
 // ── Chat ─────────────────────────────────────────────────────────────────
-function addMsg(role, content, sources, thought) {
+function addMsg(role, content, sources, thought, tokenUsage) {
   const wel = $('#welcome');
   if (wel) wel.remove();
 
@@ -1236,8 +1257,16 @@ function addMsg(role, content, sources, thought) {
       <div class="msg-avatar">${avatar}</div>
       <div class="msg-body">
         <div class="msg-bubble">${role === 'assistant' ? renderMarkdown(content) : esc(content)}</div>
-        <div class="msg-time">${time}</div>
+        <div class="msg-meta">
+          <span class="msg-time">${time}</span>
     `;
+
+    // Token usage badge (assistant only)
+    if (role === 'assistant' && tokenUsage && tokenUsage.total_tokens > 0) {
+      html += `<span class="token-badge">⚡ ${tokenUsage.total_tokens} tokens</span>`;
+    }
+
+    html += `</div>`;  // close msg-meta
 
     if (sources && sources.length) {
       html += `<details class="sources-box"><summary>📚 ${sources.length} 个参考来源</summary>`;
@@ -1291,7 +1320,7 @@ async function send() {
   try {
     const r = await call('POST', '/agent/chat', { message: text });
     loading.remove();
-    addMsg('assistant', r.answer, r.sources, r.agent_thought);
+    addMsg('assistant', r.answer, r.sources, r.agent_thought, r.token_usage);
   } catch (e) {
     loading.remove();
     addMsg('assistant', `❌ 请求失败: ${e.message}`);
