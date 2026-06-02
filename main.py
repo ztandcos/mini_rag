@@ -20,6 +20,7 @@ from typing import Optional
 import uvicorn
 from fastapi import FastAPI, UploadFile, File, Depends, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
 from sqlalchemy.orm import Session as DBSession
 
 from app.config import settings
@@ -94,6 +95,11 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# Serve the frontend static files
+FRONTEND_DIR = os.path.join(os.path.dirname(__file__), "frontend")
+if os.path.isdir(FRONTEND_DIR):
+    app.mount("/ui", StaticFiles(directory=FRONTEND_DIR, html=True), name="frontend")
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -286,12 +292,8 @@ def agent_chat(req: ChatRequest, db: DBSession = Depends(get_db_session)):
 
 @app.get("/")
 def root():
-    return {
-        "app": "Mini RAG",
-        "version": "0.1.0",
-        "docs": "/docs",
-        "health": "/api/health",
-    }
+    from fastapi.responses import RedirectResponse
+    return RedirectResponse(url="/ui")
 
 
 # ─── Entry Point ─────────────────────────────────────────────────────────────
